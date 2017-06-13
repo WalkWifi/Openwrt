@@ -1,0 +1,6 @@
+
+Kevin Wei build the direction at 2016.1.20
+
+this direction have the option of the rootfs of the openwrt os.
+cp this direction to "openwrt-mt7688/target/linux/ramips/base-files"
+the we build the OS,the all direction will join in the OS.
