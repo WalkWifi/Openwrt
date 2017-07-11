@@ -1,0 +1,171 @@
+diff -Nur linux-3.10.14-p112871.bak/drivers/net/usb/qmi_wwan.c linux-3.10.14-p112871/drivers/net/usb/qmi_wwan.c
+--- linux-3.10.14-p112871.bak/drivers/net/usb/qmi_wwan.c	2017-07-11 01:54:42.152079900 -0700
++++ linux-3.10.14-p112871/drivers/net/usb/qmi_wwan.c	2017-07-11 01:35:15.903598313 -0700
+@@ -76,6 +76,23 @@
+  * to 00:a0:c6:00:00:00 despite the host address being different.
+  * This function will also fixup such packets.
+  */
++
++struct sk_buff *qmi_wwan_tx_fixup(struct usbnet *dev, struct sk_buff *skb, gfp_t flags)
++{
++	if (dev->udev->descriptor.idVendor != cpu_to_le16(0x2C7C))
++		return skb;
++	// Skip Ethernet header from message
++	if (skb_pull(skb, ETH_HLEN)) {
++		return skb;
++	} 
++	else {
++		dev_err(&dev->intf->dev, "Packet Dropped ");
++	}
++	// Filter the packet out, release it
++	dev_kfree_skb_any(skb);
++	return NULL;
++}
++
+ static int qmi_wwan_rx_fixup(struct usbnet *dev, struct sk_buff *skb)
+ {
+ 	__be16 proto;
+@@ -84,6 +101,12 @@
+ 	 * hard_header_len, so we can inspect the dest address without
+ 	 * checking skb->len
+ 	 */
++	if (dev->udev->descriptor.idVendor != cpu_to_le16(0x2C7C))
++		return 1;
++	/* This check is no longer done by usbnet */
++	if (skb->len < dev->net->hard_header_len)
++		return 0;
++
+ 	switch (skb->data[0] & 0xf0) {
+ 	case 0x40:
+ 		proto = htons(ETH_P_IP);
+@@ -332,6 +355,21 @@
+ 		dev->net->dev_addr[0] &= 0xbf;	/* clear "IP" bit */
+ 	}
+ 	dev->net->netdev_ops = &qmi_wwan_netdev_ops;
++
++	if (dev->udev->descriptor.idVendor == cpu_to_le16(0x2C7C)) {
++		dev_info(&intf->dev, "Quectel EC21&EC25&EC20 R2.0 work on RawIP mode\n");
++		dev->net->flags |= IFF_NOARP;
++
++		usb_control_msg(
++			interface_to_usbdev(intf),
++			usb_sndctrlpipe(interface_to_usbdev(intf), 0),
++			0x22, //USB_CDC_REQ_SET_CONTROL_LINE_STATE
++			0x21, //USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE
++			1, //active CDC DTR
++			intf->cur_altsetting->desc.bInterfaceNumber,
++			NULL, 0, 100);
++	}
++
+ err:
+ 	return status;
+ }
+@@ -416,6 +454,7 @@
+ 	.unbind		= qmi_wwan_unbind,
+ 	.manage_power	= qmi_wwan_manage_power,
+ 	.rx_fixup       = qmi_wwan_rx_fixup,
++	.tx_fixup       = qmi_wwan_tx_fixup,
+ };
+ 
+ #define HUAWEI_VENDOR_ID	0x12D1
+@@ -516,6 +555,23 @@
+ 		.driver_info        = (unsigned long)&qmi_wwan_info,
+ 	},
+ 
++	#ifndef QMI_FIXED_INTF
++	/* map QMI/wwan function by a fixed interface number */
++	#define QMI_FIXED_INTF(vend, prod, num) \
++	.match_flags = USB_DEVICE_ID_MATCH_DEVICE |
++	USB_DEVICE_ID_MATCH_INT_INFO, \
++	.idVendor = vend, \
++	.idProduct = prod, \
++	.bInterfaceClass = 0xff, \
++	.bInterfaceSubClass = 0xff, \
++	.bInterfaceProtocol = 0xff, \
++	.driver_info = (unsigned long)&qmi_wwan_force_int##num,
++	#endif
++	{ QMI_FIXED_INTF(0x05C6, 0x9003, 4) }, /* Quectel UC20 */
++	{ QMI_FIXED_INTF(0x05C6, 0x9215, 4) }, /* Quectel EC20 */
++	{ QMI_FIXED_INTF(0x2C7C, 0x0125, 4) }, /* Quectel EC25/EC20 R2.0 */
++	{ QMI_FIXED_INTF(0x2C7C, 0x0121, 4) }, /* Quectel EC21 */
++
+ 	/* 3. Combined interface devices matching on interface number */
+ 	{QMI_FIXED_INTF(0x0408, 0xea42, 4)},	/* Yota / Megafon M100-1 */
+ 	{QMI_FIXED_INTF(0x12d1, 0x140c, 1)},	/* Huawei E173 */
+@@ -614,7 +670,7 @@
+ 	{QMI_GOBI_DEVICE(0x05c6, 0x9225)},	/* Sony Gobi 2000 Modem device (N0279, VU730) */
+ 	{QMI_GOBI_DEVICE(0x05c6, 0x9245)},	/* Samsung Gobi 2000 Modem device (VL176) */
+ 	{QMI_GOBI_DEVICE(0x03f0, 0x251d)},	/* HP Gobi 2000 Modem device (VP412) */
+-	{QMI_GOBI_DEVICE(0x05c6, 0x9215)},	/* Acer Gobi 2000 Modem device (VP413) */
++	//{QMI_GOBI_DEVICE(0x05c6, 0x9215)},	/* Acer Gobi 2000 Modem device (VP413) */
+ 	{QMI_GOBI_DEVICE(0x05c6, 0x9265)},	/* Asus Gobi 2000 Modem device (VR305) */
+ 	{QMI_GOBI_DEVICE(0x05c6, 0x9235)},	/* Top Global Gobi 2000 Modem device (VR306) */
+ 	{QMI_GOBI_DEVICE(0x05c6, 0x9275)},	/* iRex Technologies Gobi 2000 Modem device (VR307) */
+diff -Nur linux-3.10.14-p112871.bak/drivers/usb/serial/option.c linux-3.10.14-p112871/drivers/usb/serial/option.c
+--- linux-3.10.14-p112871.bak/drivers/usb/serial/option.c	2017-07-10 02:38:07.974536388 -0700
++++ linux-3.10.14-p112871/drivers/usb/serial/option.c	2017-07-11 01:33:50.123553357 -0700
+@@ -530,6 +530,11 @@
+ };
+ 
+ static const struct usb_device_id option_ids[] = {
++	{ USB_DEVICE(0x05C6, 0x9090) }, /* Quectel UC15 */
++	{ USB_DEVICE(0x05C6, 0x9003) }, /* Quectel UC20 */
++	{ USB_DEVICE(0x05C6, 0x9215) }, /* Quectel EC20 */
++	{ USB_DEVICE(0x2C7C, 0x0125) }, /* Quectel EC25/EC20 R2.0 */
++	{ USB_DEVICE(0x2C7C, 0x0121) }, /* Quectel EC21 */
+ 	{ USB_DEVICE(OPTION_VENDOR_ID, OPTION_PRODUCT_COLT) },
+ 	{ USB_DEVICE(OPTION_VENDOR_ID, OPTION_PRODUCT_RICOLA) },
+ 	{ USB_DEVICE(OPTION_VENDOR_ID, OPTION_PRODUCT_RICOLA_LIGHT) },
+@@ -1377,6 +1382,7 @@
+ #ifdef CONFIG_PM
+ 	.suspend           = usb_wwan_suspend,
+ 	.resume            = usb_wwan_resume,
++	.reset_resume      = usb_wwan_resume,
+ #endif
+ };
+ 
+@@ -1444,6 +1450,23 @@
+ 	    iface_desc->bInterfaceClass != USB_CLASS_CDC_DATA)
+ 		return -ENODEV;
+ 
++	//Quectel UC20's interface 4 can be used as USB Network device
++	if (serial->dev->descriptor.idVendor == cpu_to_le16(0x05C6) &&
++		serial->dev->descriptor.idProduct == cpu_to_le16(0x9003)
++		&& serial->interface->cur_altsetting->desc.bInterfaceNumber >= 4)
++		return -ENODEV;
++	
++	//Quectel EC20's interface 4 can be used as USB Network device
++	if (serial->dev->descriptor.idVendor == cpu_to_le16(0x05C6) &&
++		serial->dev->descriptor.idProduct == cpu_to_le16(0x9215)	
++		&& serial->interface->cur_altsetting->desc.bInterfaceNumber >= 4)
++		return -ENODEV;
++	
++	//Quectel EC21&EC25&EC20 R2.0's interface 4 can be used as USB Network device
++	if (serial->dev->descriptor.idVendor == cpu_to_le16(0x2C7C)
++		&& serial->interface->cur_altsetting->desc.bInterfaceNumber >= 4)
++		return -ENODEV;
++	
+ 	/* Store device id so we can use it during attach. */
+ 	usb_set_serial_data(serial, (void *)id);
+ 
+diff -Nur linux-3.10.14-p112871.bak/drivers/usb/serial/usb_wwan.c linux-3.10.14-p112871/drivers/usb/serial/usb_wwan.c
+--- linux-3.10.14-p112871.bak/drivers/usb/serial/usb_wwan.c	2017-07-10 02:38:07.882535501 -0700
++++ linux-3.10.14-p112871/drivers/usb/serial/usb_wwan.c	2017-07-11 01:24:01.837508179 -0700
+@@ -459,6 +459,17 @@
+ 			  usb_sndbulkpipe(serial->dev, endpoint) | dir,
+ 			  buf, len, callback, ctx);
+ 
++	if (dir == USB_DIR_OUT) {
++		struct usb_device_descriptor *desc = &serial->dev->descriptor;
++		if (desc->idVendor == cpu_to_le16(0x05C6) && desc->idProduct == cpu_to_le16(0x9090))
++		urb->transfer_flags |= URB_ZERO_PACKET;
++		if (desc->idVendor == cpu_to_le16(0x05C6) && desc->idProduct == cpu_to_le16(0x9003))
++		urb->transfer_flags |= URB_ZERO_PACKET;
++		if (desc->idVendor == cpu_to_le16(0x05C6) && desc->idProduct == cpu_to_le16(0x9215))
++		urb->transfer_flags |= URB_ZERO_PACKET;
++		if (desc->idVendor == cpu_to_le16(0x2C7C))
++		urb->transfer_flags |= URB_ZERO_PACKET;
++	}
+ 	return urb;
+ }
+ 
