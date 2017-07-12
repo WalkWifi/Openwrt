@@ -15,19 +15,19 @@ else
 fi
 
 #button for power off
-if [ -f /opt/ejoin_fs/button.tgz ];then
-	tar -xzvf /opt/ejoin_fs/button.tgz -C /opt/ejoin/bin
-	/opt/ejoin/bin/button &
-else
-	echo "the file named 'button.tgz' is lost"
-fi
+#if [ -f /opt/ejoin_fs/button.tgz ];then
+#	tar -xzvf /opt/ejoin_fs/button.tgz -C /opt/ejoin/bin
+#	/opt/ejoin/bin/button &
+#else
+#	echo "the file named 'button.tgz' is lost"
+#fi
 
 #update app
 sleep 15
 
 if [ -f /opt/ejoin_fs/vfd.tgz ];then
-	tar -xzvf /opt/ejoin_fs/vfd.tgz -C /opt/ejoin/bin
-	/opt/ejoin/bin/vfd -d
+	tar -xzvf /opt/ejoin_fs/vfd.tgz -C /opt/ejoin/bin 1>/dev/null
+	/opt/ejoin/bin/vfd -d -L 3
 else
 	echo "the file named 'vfd.tgz' is lost"
 fi
