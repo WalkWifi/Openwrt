@@ -1,0 +1,27 @@
+opengt
+ set com 115200n81
+ set comecho off
+ set senddelay 0.02
+ waitquiet 0.2 0.2
+ flash 0.1
+
+:start
+ send "AT+CPIN?^m"
+ waitfor 0.5 "ERROR" "READY"
+ if % = -1 goto cpintimeout
+ if % = 0 goto cpinerror
+ if % = 1 goto cpinok
+ print "2"
+ exit 1
+
+:cpintimeout
+ print "-1"
+ exit 1
+
+:cpinerror
+ print "0"
+ exit 1
+
+:cpinok
+ print "1"
+ exit 1

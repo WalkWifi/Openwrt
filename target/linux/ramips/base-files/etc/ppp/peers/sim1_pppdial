@@ -1,4 +1,4 @@
-/dev/ttyACM3
+/dev/ttyUSB2
 115200
 nocrtscts
 nocdtrcts

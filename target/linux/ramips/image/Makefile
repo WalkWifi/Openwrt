@@ -736,7 +736,7 @@ endif
 # MT7628 Profiles
 #
 
-Image/Build/Profile/MT7628=$(call BuildFirmware/Default8M/$(1),$(1),mt7628,MT7628)
+Image/Build/Profile/MT7628=$(call BuildFirmware/Default16M/$(1),$(1),mt7628,MT7628)
 
 ifeq ($(SUBTARGET),mt7628)
 define Image/Build/Profile/Default

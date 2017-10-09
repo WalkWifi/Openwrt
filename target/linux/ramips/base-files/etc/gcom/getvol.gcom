@@ -1,0 +1,18 @@
+opengt
+ set com 115200n81
+ set comecho off
+ set senddelay 0.02
+ waitquiet 0.2 0.2
+ flash 0.1
+
+:start
+ send "AT+CBC^m"
+ waitfor 1 "+CBC"
+ if % = -1 goto voltimeout
+ get 1 "^m" $s
+ print $s
+ exit 1
+
+:voltimeout
+ print "0"
+ exit 1

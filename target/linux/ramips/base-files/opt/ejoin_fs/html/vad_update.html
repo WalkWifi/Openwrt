@@ -1,0 +1,306 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta http-equiv="pragma" content="no-cache">
+<meta http-equiv="cache-control" content="no-cache, must-revalidate"/>
+<meta http-equiv="expires" content="0"/>
+<title>VAD Update</title>
+<style>
+table.inputBoxFile tr td,table.inputBoxFile tr th{
+   border: 1px solid #ddd;
+   text-align: center;
+   height:40px;
+} 
+.fileicon{
+   cursor: default;
+   background-image: url("dir.png");
+   background-position: -574px -408px;
+   background-repeat: no-repeat;
+   width: 60px;
+}
+.spanBox{
+   text-align:center;
+   font-size:14px;
+   color:#0000ff;
+   cursor:pointer;
+}
+</style>
+<script>
+   // var ip = "http://192.168.1.102:8080";
+    var totalPath="";
+	// JavaScript Document
+	var glbUpdatingStatus = {
+		idle : "",
+		updating : "File is uploading ... ",
+		saving : "DO NOT power off! saving ... ",
+		verifying : "DO NOT power off! verify ... ",
+		ok: "Successful!",
+		failed : "Update failed",
+		rebooting : "System is rebooting ... "
+	}; 
+
+    window.onload=function(){
+          disableBtnUpdate();
+	  	  readStatus();
+		  ajaxFileList();
+    }; 
+
+    function toGetStatus(){
+		showStatus(glbUpdatingStatus.updating);
+        setTimeout(readStatus, 1000);
+		setTimeout(disableBtnUpdate, 10);	// delay 10ms to let the form submit data
+    }
+
+	function createXMLHttpRequest() {  
+		var request = false;  
+		if (window.XMLHttpRequest) {  
+			request = new XMLHttpRequest();  
+			if (request.overrideMimeType) {  
+				request.overrideMimeType('text/xml');  
+			}  
+		} else if (window.ActiveXObject) {  
+			var versions = [ 'Microsoft.XMLHTTP', 'MSXML.XMLHTTP',  
+					'Microsoft.XMLHTTP', 'Msxml2.XMLHTTP.7.0',  
+					'Msxml2.XMLHTTP.6.0', 'Msxml2.XMLHTTP.5.0',  
+					'Msxml2.XMLHTTP.4.0', 'MSXML2.XMLHTTP.3.0', 'MSXML2.XMLHTTP' ];  
+			for ( var i = 0; i < versions.length; i++) {  
+				try {  
+					request = new ActiveXObject(versions[i]);  
+					if (request) {  
+						return request;  
+					}  
+				} catch (e) {  
+				}  
+			}  
+		}  
+		return request;  
+	}
+    // 使用举例  
+	var xmlhttp = createXMLHttpRequest();  
+ 
+	var xmlhttpFile = createXMLHttpRequest(); 
+
+    function ajax(xmlhttp, _method, _url, _param, _callback) {  
+		if (typeof xmlhttp == 'undefined')  
+			return;  
+		xmlhttp.onreadystatechange = function() {
+			if (xmlhttp.readyState == 4 && (xmlhttp.status == 200   ||  xmlhttp.status==0)) {  
+				_callback(xmlhttp);  
+			}  
+		}; 
+		xmlhttp.open(_method, _url, true);  
+		if (_method == "POST") {   
+			xmlhttp.setRequestHeader("Content-Type",  
+					"application/x-www-form-urlencoded");  
+			xmlhttp.setRequestHeader("Content-Length", _param.length);  
+			xmlhttp.send(_param);  
+		} else {  
+			xmlhttp.send(null);  
+		}  
+    }  
+    
+
+	
+	var t1; // 用来作超时处理  
+	function adduserok(request) {  
+		if (t1) {
+			clearTimeout(t1);
+			t1 = null;
+		}
+
+		if(request.responseText!=null){
+			var obj = eval('('+request.responseText+')');
+			var strStates = ["idle", "ok", "failed", "updating", "saving", "rebooting"];
+			var strState = strStates[obj.state];
+			var statusStr = glbUpdatingStatus[strState];
+			
+			if (strState == "updating" || strState == "saving") {
+				statusStr += "["+obj.progress+"％]";
+			} else if (strState == "failed" && obj.reason != "") {
+				statusStr += ": " + obj.reason;
+			}
+			 
+			showStatus(statusStr);
+			
+			if (strState == "idle" || strState == "ok" || strState == "failed") {
+				enableBtnUpdate();
+			} else {
+        		setTimeout(readStatus, 1000);
+			}
+		}else{
+			showStatus("Syatem updated failed!");
+		}
+	} 
+	
+	function connecttoFail() {  
+		if (xmlhttp)  
+			xmlhttp.abort();  
+		// alert ('Time out');  
+	} 
+	
+    function readStatus(){		 
+		if (xmlhttp) {  
+			ajax(xmlhttp, "GET", "progress.json", "",  
+					adduserok);  
+			t1 = setTimeout(connecttoFail, 100000);  
+		} else {  
+			alert("Init xmlhttprequest fail");  
+		} 
+	} 
+
+	function enableBtnUpdate() {
+		//$("#ID_BtnUpdateConfirm").removeAttr("disabled");
+		document.getElementById("ID_BtnUpdateConfirm").disabled=false;
+	}
+	
+	function disableBtnUpdate() {
+		document.getElementById("ID_BtnUpdateConfirm").disabled=true;
+	}
+	
+    function showStatus(msg){
+        var element = document.getElementById("ID_StatusBox");
+        element.style.display = "block";
+        element.innerHTML = msg;
+    }
+    
+
+	function ajaxFileList(directory){
+		resetPath(directory);
+		if (xmlhttpFile) { 
+			var url = "file_list.json?dir="+totalPath;
+			   ajax(xmlhttpFile, "get", url, "", htmlFileList);  
+		} else {  
+			alert("Init xmlhttprequest fail");  
+		}		
+	}
+    
+
+	function htmlFileList(request){
+	   if(request.responseText!=null){		   
+		//    var data = '{"file_num":   2, "files":[{"name":"vdg", "type":"dir"}, {"name":"vfd.log", "type":"log", "size":4188, "mtime":1456945206}]}';
+		    var obj = eval('('+request.responseText+')');
+             //当返回属性type为dir时，表示是子目录
+            htmlFileNum(obj.file_num);
+            htmlBackPrevious();
+			var files = obj.files;
+            var html ="<table id='inputBoxFile_ID' class='inputBoxFile' cellspacing='0' cellpadding='0' align='center' width='100%'>";
+			    html +="<thead><tr><th colspan='2'>文件名</th><th>大小</th><th>时间</th><th>操作</th></tr></thead><tbody>";
+			for(var i=0;i<obj.file_num;i++){
+                 var objFiles = files[i];
+				 html +=" <tr>";
+				 if(objFiles.type=="log" || objFiles.type=="gdb"){
+				   //   html +="<td>"+objFiles.size+"</td><td>"+objFiles.mtime+"</td><td><a href='javascript:downloadFile(\""+objFiles.name+"\")'>下载</a></td></tr>"; 
+				        var url = objFiles.name; 
+                        if(objFiles.name!=""){
+							 url = totalPath+"/"+objFiles.name;
+						}
+						var unixTimestamp = new Date(objFiles.mtime * 1000)
+                        var commonTime = unixTimestamp.toLocaleString()
+						var fileSize = (objFiles.size+"").replace(/\B(?=(?:\d{3})+\b)/g, ',');
+				        html +="<td style='border-right: 0 solid #fff;'></td><td style='text-align: center;border-left: 0 solid #fff;'>"+objFiles.name+"</td><td>"+fileSize+"</td><td>"+commonTime+"</td><td><a href='javascript:downloadFile(\""+url+"\")'>下载</a></td></tr>"; 
+				 }else if(objFiles.type=="dir"){
+					  var fileName = objFiles.name;
+				      html +="<td class='fileicon' style='border-right: 0 solid #fff;'></td><td style='text-align: left;border-left: 0 solid #fff;'><a href='javascript:ajaxFileList(\""+fileName+"\")'>"+fileName+"</a></td><td></td><td></td><td><a href='javascript:ajaxFileList(\""+fileName+"\")'>打开</a></td></tr>"; 
+				 }else{
+				      html +="<td colspan='5'></td></tr>"; 
+				 }	 
+			}
+			html +="</tbody></table>";
+            var myTable=document.getElementById("ID_LogFileBox_Body");
+            myTable.innerHTML = html;
+	  	}else{
+			 
+	  	}
+	}
+
+	function downloadFile(filename) {
+		var form = document.forms[1];
+		form.action = filename.substr(1);
+		form.method = "get";
+		form.submit();
+	} 
+
+	function resetPath(directory){
+	    if(directory){
+		    totalPath += "/"+directory;
+		}else{
+		    totalPath = "";
+		}
+	}
+	
+	function htmlBackPrevious(){
+		var backPrevious = document.getElementById("backPrevious_ID");
+		var initTotalPath = document.getElementById("totalPath_ID");
+	    if(totalPath!=""){
+		      backPrevious.style.display="";
+		}else{
+		      backPrevious.style.display="none";
+		}
+		initTotalPath.innerHTML=totalPath;
+	}
+
+	function htmlFileNum(num){
+	    document.getElementById("fileNum_ID").innerHTML=num;
+	}
+    
+	function backPrevious(){
+	    if(totalPath!=""){
+		     var lastIndex=totalPath.lastIndexOf('/');
+			 var directory = totalPath.substring(0,lastIndex);
+             ajaxFileList(directory);
+		}
+	}
+	 
+	function refresh(){
+	   if (xmlhttpFile) { 
+			var url = "file_list.json?dir="+totalPath;
+			   ajax(xmlhttpFile, "get", url, "", htmlFileList);  
+		} else {  
+			alert("Init xmlhttprequest fail");  
+		}
+	}
+</script>
+
+</head>
+
+<body>
+
+<div style="height:100px;margin: 0 auto;margin-top:100px;">
+    <div id="ID_StatusBox" style="text-align:center;display:none;font-size:14px;color:#0000ff;"></div>
+</div>
+
+<div style="width: 600px;margin: 0 auto;">
+    <div class="infoBox">
+        <div id="ID_SystemUpdateBox_Body">
+            <form action="" method="post" enctype="multipart/form-data" name="form1">
+            <table class="inputBox" width="100%" align="center" cellSpacing="0" cellPadding="0">
+            	<thead>
+                	<th style="width:15%;"></th><th style="width:80%;"></th><th></th>
+                </thead>
+            	<tr><td class="inputLable"><span style="color:red;">Note:</span></td><td class="inputValue"><span style="color:red;">The binary file is lost or broken, &nbsp;please update it.</span></td><td></td></tr>
+                <tr><td class="inputLable"><span style="color:red;">Warning:</span></td><td class="inputValue"><span style="color:red;">Please ensure the hardware is matched, or the system will boot failed!</span></td><td></td></tr>
+                <tr style="height:22px;"><td></td><td></td><td></td></tr>
+                <tr><td class="inputLable">Binary File:</td><td class="inputValue"><input class="textValue" name="vad" type="file"  size="32" style="width:440px;height:22px;line-height:22px;border:1px solid #7491b5;"></td><td style="text-align:center"><input id="ID_BtnUpdateConfirm" type="submit" style="width:65px;height:24px;line-height:22px;" value="Submit" onclick="toGetStatus();" disabled="disabled"/></td></tr>
+            </table>
+            </form>
+        </div>
+    </div>
+	<div style="margin: 0 auto;margin-top:100px;margin-bottom: 10px;">
+		<form action="" method="post" name="form1">
+			<div>
+			     <span class="spanBox" onclick="refresh()">刷新</span>
+				 <span class="spanBox" id="backPrevious_ID" onclick="backPrevious()">返回上一级|</span>
+				 <span class="spanBox" onclick="ajaxFileList()">全部文件></span>
+				 <span id="totalPath_ID"></span>
+				 <span style="float: right;width:160px;">已全部加载，共<span id="fileNum_ID" style="color:#0000ff;"></span>个</span>
+			</div>
+		</form>
+	</div>
+    <div class="infoBox">
+        <div id="ID_LogFileBox_Body">
+        </div>
+    </div> 
+</div>
+</body>
+</html>
